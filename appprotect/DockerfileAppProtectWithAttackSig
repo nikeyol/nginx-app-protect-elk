@@ -1,0 +1,16 @@
+FROM centos:7.4.1708
+
+ARG APP_PROTECT_VERSION=20
+
+COPY entrypoint.sh installAppProtect.sh app-protect-20.zip /root/
+
+RUN  cd /root && ls -al /root/ && chmod +x /root/installAppProtect.sh && chmod +x /root/entrypoint.sh  \
+ && /root/installAppProtect.sh app-protect-20.zip 
+RUN yum localinstall -y  /root/r20/app-protect-attack-signatures-2020.03.16-1.el7.centos.x86_64.rpm
+
+COPY log-default.json nginx.conf /etc/nginx/
+
+STOPSIGNAL SIGTERM
+
+CMD ["/root/entrypoint.sh"]
+

@@ -1,0 +1,14 @@
+FROM centos:7.4.1708
+
+ENV APP_PROTECT_VERSION=20
+
+ARG APP_PROTECT_VERSION
+COPY entrypoint.sh installAppProtect.sh app-protect-20.zip /root/
+
+RUN  cd /root && ls -al /root/ && chmod +x /root/installAppProtect.sh && chmod +x /root/entrypoint.sh  \
+ && /root/installAppProtect.sh app-protect-20.zip 
+ 
+COPY log-default.json nginx.conf /etc/nginx/
+
+CMD ["/root/entrypoint.sh"]
+

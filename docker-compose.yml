@@ -1,0 +1,67 @@
+version: '3'
+services:
+    # gRPC App listening on container port 50051 & host mapping to 8080
+    grpc-app:
+        image: enm10k/grpc-hello-world 
+        command: greeter_server
+        environment: 
+            - PORT=50051
+        ports:
+            - "5000:50051"
+    # HTTP App (httpbin) listening on container port 80 & host mapping to 8080
+    http-app:
+        image: kennethreitz/httpbin
+        environment:
+            - "GUNICORN_CMD_ARGS=\"--capture-output --error-logfile - --access-logfile - --access-logformat \"%(h)s %(t)s %(r)s %(s)s Host: %({Host}i)s}\"\""
+        ports:
+        - "8080:80"
+    nginx:
+        build:
+            context: ./nginx
+            dockerfile: Dockerfile
+        ports:
+            - "8000:8000" # HTTP App (protection ON)
+            - "9000:9000" # gRPC App (protection ON)
+            - "8001:8001" # HTTP App (protection OFF)
+            - "9001:9001" # gRPC App (protection OFF)
+        links:
+            - grpc-app
+        depends_on:
+            - grpc-app
+
+    elasticsearch:
+        image: sebp/elk:740
+        restart: always
+        volumes:
+            - ./logstash/conf.d:/etc/logstash/conf.d:ro
+            - elk:/var/lib/elasticsearch
+        ports:
+            - "9200:9200"
+            - "5601:5601"
+            - "5144:5144"
+
+    grpc-native-client:
+        image: enm10k/grpc-hello-world
+        command: sh -c "
+            while true; 
+                do echo "------------------AppProtectON----------------------";
+                ADDRESS=nginx:9000 greeter_client \", this is a safe payload, next one should be blocked.\";
+                ADDRESS=nginx:9000 greeter_client \"This should be blocked %3Cscript%3Eevil_script()%3C/script%3E\";
+                echo "------------------AppProtectOFF----------------------";
+                ADDRESS=nginx:9001 greeter_client \"Unsafe Payload %3Cscript%3Eevil_script()%3C/script%3E\";
+                sleep 5; done;"
+        depends_on:
+            - nginx
+    http-client:
+        image: giantswarm/tiny-tools
+        command: sh -c "
+            while true; 
+                do echo "------------------AppProtectON----------------------";
+                curl -s http://nginx:8000/ip?path=%3Cscript%3Eevil_script\(\)%3C/script%3E 2>&1 && echo;
+                echo "------------------AppProtectOFF----------------------";
+                curl -s http://nginx:8001/ip?path=%3Cscript%3Eevil_script\(\)%3C/script%3E 2>&1 && sleep 5 ; done"
+        depends_on:
+            - nginx
+
+volumes:
+   elk:
